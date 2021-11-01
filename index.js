@@ -2,6 +2,7 @@ const express = require('express');
 const { MongoClient } = require('mongodb');
 const cors = require('cors');
 require('dotenv').config();
+const ObjectId = require('mongodb').ObjectId;
 
 const app = express();
 const port = process.env.PORT || 3030;
@@ -19,6 +20,8 @@ async function run(){
         await client.connect();
         const database = client.db('chill_out');
         const planCollection = database.collection('plans');
+        const orderCollection = database.collection('all_order');
+
         // const orderCollection = database.collection('orders');
 
         //GET plans
@@ -28,43 +31,110 @@ async function run(){
             res.json(plans);
         })
 
-        //GET Products
-        // app.get('/products', async(req,res)=>{
-            
-        //     const cursor = productCollection.find({});
-        //     const page = req.query.page;
-        //     const size = 10;
-        //     let products;
-        //     const count = await cursor.count();
-        //     if(page){
-        //         products = await cursor.skip(page*size).limit(size).toArray()
-        //     }
-        //     else{
-        //         const products = await cursor.toArray();
-        //     }
-
-        //     res.json({products,count})
-        // })
+        
 
 
 
         //POST api to get data by keys
-        // app.post('/products/byKeys', async(req,res)=>{
-        //     const keys = req.body;
-        //     const query = {key: {$in: keys}}
-        //     const products = await productCollection.find(query).toArray();
-        //     res.json(products);
-        // })
+        app.post('/plan/byKeys', async(req,res)=>{
+            const keys = req.body.key;
+            const query = {_id: ObjectId(keys)}
+            const plan = await planCollection.findOne(query);
+            res.json(plan);
+        })
 
-        //Add order api
-        // app.post('/orders', async(req,res)=>{
-        //     const order = req.body;
-        //     console.log('order ', order);
+        // Add order api
+        app.post('/addplan', async(req,res)=>{
+            const order = req.body;
+            console.log('order ', order);
 
-        //     const result = await orderCollection.insertOne(order);
-        //     res.json(result);
+            const result = await planCollection.insertOne(order);
+            res.json(result);
 
-        // })
+        })
+
+        //Post api for store order
+        app.post('/setorder', async(req,res)=>{
+            // res.json(req.body);
+            const email = req.body.email;
+
+            const query = {email: email};
+            const options = { upsert: true };
+            const userData = await orderCollection.findOne(query);
+
+            // const newOrder = [...userData.order,...req.body.order];
+            // res.json(newOrder)
+
+            if(userData){
+                const newOrder = {order: [...userData.order,...req.body.order]};
+                const newmdOrder = {
+                    $set: newOrder
+                }
+                const result = await orderCollection.updateOne(query,newmdOrder, options);
+                res.json(result)
+            }
+            else{
+                const newOrder = {order: [...req.body.order]};
+                const newmdOrder = {
+                    $set: newOrder
+                }
+                const result = await orderCollection.updateOne(query,newmdOrder, options);
+                res.json(result)
+
+            }
+        })
+
+        //Post for set same to same order
+        app.post('/setorderex',async(req,res)=>{
+            const email = req.body.email;
+
+            const query = {email: email};
+            const options = { upsert: true };
+
+            const newOrder = {order: [...req.body.order]};
+                const newmdOrder = {
+                    $set: newOrder
+                }
+            const result = await orderCollection.updateOne(query,newmdOrder, options);
+            res.json(result)
+
+        })
+
+        //Post single user orders
+        app.post('/singleuserorders/',async(req,res)=>{
+            const email = req.body.email;
+            const query = {email: email};
+
+            const result = await orderCollection.findOne(query);
+            res.json(result);
+        })
+
+        //Get orderdelails
+        app.get('/orderinfo/:id',async(req,res)=>{
+            const id = req.params.id;
+
+            const query = {_id: ObjectId(id)}
+            const plan = await planCollection.findOne(query);
+            res.json(plan);
+        })
+
+        //Get all user
+        app.get('/alluserinfo',async(req,res)=>{
+            const cursor = orderCollection.find({});
+            const users = await cursor.toArray();
+            res.json(users);
+        })
+
+        //Delete user all orders
+        app.delete('/deleteuserorder',async(req,res)=>{
+            const email = req.body.email;
+            const query = { email: email };
+            const result = await orderCollection.deleteOne(query);
+
+            const cursor = orderCollection.find({});
+            const users = await cursor.toArray();
+            res.json(users);
+        })
 
     }
     finally{
